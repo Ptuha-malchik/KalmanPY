@@ -27,6 +27,38 @@ def plot_trajectory(position_x, position_y, theta):
     plt.axis('equal')  # Установка одинакового масштаба для осей X и Y
     plt.grid(True)
     plt.show()
+
+def kalman_filter(z, dt):
+    # Инициализация переменных
+    x = np.array([[0.0, 0.0, 0.0, 0.0]]).T  # состояние (x, y, vx, vy)
+    P = np.eye(4)  # оценка ошибки ковариации
+    F = np.array([[1, 0, dt, 0],
+                  [0, 1, 0, dt],
+                  [0, 0, 1, 0],
+                  [0, 0, 0, 1]])  # матрица перехода состояния
+    Q = np.eye(4) * 0.1  # ковариация шума процесса
+    H = np.array([[1, 0, 0, 0],
+                  [0, 1, 0, 0]])  # матрица наблюдения
+    R = np.eye(2) * 1  # ковариация шума наблюдения
+    
+    x_est = np.zeros((len(z), 4))  # Массив для хранения оценок положения
+    
+    for i in range(len(z)):
+        # Прогноз
+        x = np.dot(F, x)
+        P = np.dot(F, np.dot(P, F.T)) + Q
+        
+        # Обновление
+        S = np.dot(H, np.dot(P, H.T)) + R
+        K = np.dot(P, np.dot(H.T, np.linalg.inv(S)))
+        y = z[i].reshape(2, 1) - np.dot(H, x)
+        x += np.dot(K, y)
+        P = P - np.dot(K, np.dot(H, P))
+        
+        x_est[i] = x.T
+    
+    return x_est
+
     
 # Чтение данных из файла Excel
 file_path = 'KRAYOT_Smartphone.xlsx'  # Замените на путь к вашему файлу
@@ -76,4 +108,33 @@ results.to_csv(csv_file_path, index=False)
 
 print(csv_file_path)
 
-plot_trajectory(position_x, position_y, theta)
+#plot_trajectory(position_x, position_y, theta)
+# Подготовка данных для фильтра Калмана
+measurements = np.vstack((position_x, position_y)).T  # измерения
+
+# Применение фильтра Калмана
+kalman_positions = kalman_filter(measurements, time[1] - time[0])
+
+# Визуализация
+plt.figure(figsize=(15, 7))
+
+# Исходная траектория
+plt.subplot(1, 2, 1)
+plt.plot(position_x, position_y, label='Исходная траектория', color='blue')
+plt.title('Исходная траектория')
+plt.xlabel('X')
+plt.ylabel('Y')
+plt.legend()
+plt.grid(True)
+
+# Оцененная траектория с использованием фильтра Калмана
+plt.subplot(1, 2, 2)
+plt.plot(kalman_positions[:, 0], kalman_positions[:, 1], label='Оценка фильтра Калмана', color='red')
+plt.title('Траектория с использованием фильтра Калмана')
+plt.xlabel('X')
+plt.ylabel('Y')
+plt.legend()
+plt.grid(True)
+
+plt.tight_layout()
+plt.show()
